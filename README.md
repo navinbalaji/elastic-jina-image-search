@@ -19,6 +19,7 @@ Built with Elasticsearch kNN, Jina CLIP v2 on the Elastic Inference Service, and
 ## Features
 
 - 🖼️ **Search by image**: drop in a photo and get visually similar images back.
+- 📷 **Camera search**: take a photo in the browser and search with it. The front (selfie) camera opens first.
 - 💬 **Search by text**: describe what you're looking for ("man in a blue suit on stage") in any of 89 languages.
 - 🔁 **Find similar**: jump from any result to images like it.
 - 🔐 **Admin panel**: password-protected bulk upload, with duplicate detection and progress tracking.
@@ -160,6 +161,7 @@ Then set `INFERENCE_ID=jina-clip-v2-512` and follow the steps in [Switching mode
 ### Search page (`/`)
 
 - Upload a photo or type a description, then use **Find similar** on any result to search from it.
+- **Take a photo** opens the front (selfie) camera, and you can switch to the back camera. Browsers only allow the camera on HTTPS pages or `localhost`.
 - Scores are cosine similarity. Photo-to-photo matches usually score 0.5–1.0, and text-to-photo matches around 0.2–0.35, because CLIP puts text and images in the same space but not on top of each other.
 - **Minimum similarity** hides results below a score, without running a new search.
 
@@ -209,7 +211,7 @@ curl -X POST http://localhost:3000/api/search -F mode=text -F text="sunset over 
 │   ├── api/                   Route handlers
 │   ├── layout.tsx             Root layout (header, footer, theme)
 │   └── providers.tsx          EUI provider, SSR styles, color mode
-├── components/                EUI components (header, footer, results, settings)
+├── components/                EUI components (header, footer, camera, results, settings)
 ├── lib/
 │   ├── embeddings.ts          Elastic Inference Service client
 │   ├── es.ts                  Elasticsearch client and index mapping

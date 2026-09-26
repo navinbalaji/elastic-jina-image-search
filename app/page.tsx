@@ -22,6 +22,7 @@ import {
   EuiText,
 } from '@elastic/eui';
 import { useEffect, useMemo, useState } from 'react';
+import { CameraCapture, CameraIcon } from '@/components/CameraCapture';
 import { ResultsGrid } from '@/components/ResultsGrid';
 import { ApiError, fetchJson } from '@/lib/api-client';
 import { errorMessage } from '@/lib/errors';
@@ -45,6 +46,7 @@ export default function SearchPage() {
   const [error, setError] = useState<string | null>(null);
   // Seconds until the rate limit resets
   const [cooldown, setCooldown] = useState(0);
+  const [cameraOpen, setCameraOpen] = useState(false);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -86,9 +88,13 @@ export default function SearchPage() {
     }
   }
 
+  function searchImage(file: File) {
+    runSearch({ kind: 'image', file, previewUrl: URL.createObjectURL(file) });
+  }
+
   function onFiles(files: FileList | null) {
     const file = files?.[0];
-    if (file) runSearch({ kind: 'image', file, previewUrl: URL.createObjectURL(file) });
+    if (file) searchImage(file);
   }
 
   function onFindSimilar(hit: SearchHit) {
@@ -103,7 +109,7 @@ export default function SearchPage() {
     <EuiPageTemplate responsive={[]} restrictWidth={1400} panelled={false} grow={false}>
       <EuiPageTemplate.Header
         pageTitle="Reverse image search"
-        description="Upload a photo to find visually similar images, or describe what you're looking for. Powered by Jina CLIP v2 on Elastic Inference Service and Elasticsearch kNN."
+        description="Upload or take a photo to find visually similar images, or describe what you're looking for. Powered by Jina CLIP v2 on Elastic Inference Service and Elasticsearch kNN."
       />
       <EuiPageTemplate.Section>
         <EuiFlexGroup gutterSize="l" alignItems="flexStart" responsive>
@@ -128,16 +134,27 @@ export default function SearchPage() {
               <EuiSpacer size="m" />
 
               {mode === 'image' ? (
-                <EuiFilePicker
-                  id="query-image"
-                  display="large"
-                  accept="image/jpeg,image/png,image/webp,image/gif"
-                  initialPromptText="Drop a photo here or click to browse"
-                  onChange={onFiles}
-                  aria-label="Query image"
-                  disabled={cooldown > 0}
-                  fullWidth
-                />
+                <>
+                  <EuiFilePicker
+                    id="query-image"
+                    display="large"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    initialPromptText="Drop a photo here or click to browse"
+                    onChange={onFiles}
+                    aria-label="Query image"
+                    disabled={cooldown > 0}
+                    fullWidth
+                  />
+                  <EuiSpacer size="s" />
+                  <EuiButton
+                    iconType={CameraIcon}
+                    onClick={() => setCameraOpen(true)}
+                    isDisabled={cooldown > 0}
+                    fullWidth
+                  >
+                    Take a photo
+                  </EuiButton>
+                </>
               ) : (
                 <form
                   onSubmit={(e) => {
@@ -214,7 +231,7 @@ export default function SearchPage() {
                 <EuiEmptyPrompt
                   iconType="image"
                   title={<h2>Search your photo library</h2>}
-                  body={<p>Upload a photo or type a description to find matching images.</p>}
+                  body={<p>Upload or take a photo, or type a description, to find matching images.</p>}
                 />
               )
             ) : visible.length === 0 ? (
@@ -225,7 +242,7 @@ export default function SearchPage() {
                   <p>
                     {hits.length > 0
                       ? `${hits.length} results are below ${Math.round(minScore * 100)}% similarity.`
-                      : 'The index is empty. Add photos on the Index photos page.'}
+                      : 'The index is empty. Add photos on the Admin page.'}
                   </p>
                 }
                 actions={
@@ -246,6 +263,15 @@ export default function SearchPage() {
           </EuiFlexItem>
         </EuiFlexGroup>
       </EuiPageTemplate.Section>
+      {cameraOpen && (
+        <CameraCapture
+          onClose={() => setCameraOpen(false)}
+          onCapture={(file) => {
+            setCameraOpen(false);
+            searchImage(file);
+          }}
+        />
+      )}
     </EuiPageTemplate>
   );
 }
