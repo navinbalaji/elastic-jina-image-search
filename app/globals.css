@@ -1,0 +1,14 @@
+/* Small-screen tweaks; breakpoints match EUI's "m" (768px) and "xl" (1200px) */
+@media (max-width: 767px) {
+  /* Header links show only their icons */
+  .header-link .euiButtonEmpty__text {
+    display: none;
+  }
+}
+
+/* Two result columns on phones and tablets instead of EUI's one or four */
+@media (max-width: 1199px) {
+  .euiFlexGrid.results-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

@@ -1,0 +1,271 @@
+<div align="center">
+
+# Image Search
+
+**Reverse image search powered by Elastic.** Upload a photo or describe one in words, and find the most similar images in your library.
+
+Built with Elasticsearch kNN, Jina CLIP v2 on the Elastic Inference Service, and Elastic UI.
+
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Elasticsearch](https://img.shields.io/badge/Elasticsearch-9.x-005571?logo=elasticsearch)](https://www.elastic.co/elasticsearch)
+[![Next.js](https://img.shields.io/badge/Next.js-14-000000?logo=nextdotjs)](https://nextjs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![Elastic UI](https://img.shields.io/badge/UI-Elastic%20UI-00BFB3)](https://eui.elastic.co)
+
+</div>
+
+---
+
+## Features
+
+- 🖼️ **Search by image**: drop in a photo and get visually similar images back.
+- 💬 **Search by text**: describe what you're looking for ("man in a blue suit on stage") in any of 89 languages.
+- 🔁 **Find similar**: jump from any result to images like it.
+- 🔐 **Admin panel**: password-protected bulk upload, with duplicate detection and progress tracking.
+- 🚦 **Rate limiting**: per-visitor search limits, which you can turn on or off and tune from the admin panel.
+- 🌗 **Dark mode**: follows your system theme, with a one-click toggle.
+- 📱 **Mobile friendly**: works on phones and tablets as well as desktop.
+- ☁️ **Nothing extra to host**: embeddings come from Elastic Cloud's managed `.jina-clip-v2` endpoint, so there are no GPUs, model servers or third-party API keys.
+
+## How it works
+
+```mermaid
+flowchart LR
+    subgraph App[Next.js app]
+        UI[Search UI] --> S["/api/search"]
+        A[Admin panel] --> I["/api/ingest"]
+    end
+    subgraph Elastic[Elastic Cloud]
+        EIS[Elastic Inference Service<br/>.jina-clip-v2]
+        ES[(Elasticsearch<br/>dense_vector index)]
+    end
+    I -- image --> EIS
+    S -- image or text --> EIS
+    EIS -- 1024-d vector --> I & S
+    I -- bulk index --> ES
+    S -- kNN query --> ES
+```
+
+1. **Indexing**: each uploaded photo is hashed (SHA-256) to skip duplicates, embedded by Jina CLIP v2 on the Elastic Inference Service, and stored in a `dense_vector` field (cosine similarity, HNSW).
+2. **Searching**: the query photo or text is embedded into the same vector space, and Elasticsearch runs an approximate kNN search to return the nearest images.
+
+Because CLIP puts images and text in one shared space, the same index serves both image-to-image and text-to-image search.
+
+> [!NOTE]
+> CLIP finds _visually_ similar photos: the same scene, clothing or look. It doesn't do face recognition.
+
+## Quick start
+
+### Prerequisites
+
+- [Node.js](https://nodejs.org) 20 or later
+- An [Elastic Cloud](https://cloud.elastic.co/registration) deployment or Serverless project. The `.jina-clip-v2` inference endpoint comes preconfigured.
+- An Elasticsearch [API key](https://www.elastic.co/docs/deploy-manage/api-keys/elasticsearch-api-keys)
+
+### Setup
+
+```bash
+git clone https://github.com/<your-username>/image-search.git
+cd image-search
+npm install
+cp .env.example .env.local
+```
+
+Fill in `.env.local`:
+
+```bash
+ES_URL=https://your-project.es.us-central1.gcp.elastic.cloud:443
+ES_API_KEY=your-api-key
+ADMIN_PASSWORD=choose-a-strong-password
+```
+
+Create the index. This also checks that the inference endpoint works:
+
+```bash
+npm run setup-index
+```
+
+Start the app:
+
+```bash
+npm run dev
+```
+
+Open **http://localhost:3000/admin** to upload photos, then **http://localhost:3000** to search.
+
+> [!TIP]
+> Only `ADMIN_PASSWORD` has to be in `.env.local`. You can leave the Elasticsearch settings out, log in to the admin panel, and enter them on the **Configuration** tab, which can also create the index for you.
+
+## Configuration
+
+Settings come from environment variables (see [`.env.example`](.env.example)), and most of them can also be changed on the admin panel's **Configuration** tab. A value saved in the admin panel overrides the environment variable, and emptying the field goes back to it.
+
+| Variable         | Required     | Default         | In admin panel | Description                                                     |
+| ---------------- | ------------ | --------------- | -------------- | --------------------------------------------------------------- |
+| `ES_URL`         | one of these | –               | yes            | Elasticsearch endpoint URL (Serverless, hosted or self-managed) |
+| `ES_CLOUD_ID`    | one of these | –               | yes            | Cloud ID of an Elastic Cloud hosted deployment                  |
+| `ES_API_KEY`     | yes          | –               | yes            | Elasticsearch API key                                           |
+| `ES_INDEX`       | no           | `photos`        | yes            | Index name                                                      |
+| `INFERENCE_ID`   | no           | `.jina-clip-v2` | yes            | Inference endpoint for image and text embeddings                |
+| `STORAGE_DIR`    | no           | `./storage`     | no             | Where uploaded images are stored                                |
+| `ADMIN_PASSWORD` | yes          | –               | can change     | Password for the admin panel                                    |
+| `SESSION_SECRET` | no           | admin password  | no             | Key for signing admin session cookies                           |
+| `DATA_DIR`       | no           | `./data`        | no             | Where admin panel settings are stored                           |
+
+`ADMIN_PASSWORD` is always needed to log in the first time. After you change the password in the admin panel, the new one is used for logging in, but sessions are still signed with the `.env` value. `SESSION_SECRET`, `DATA_DIR` and `STORAGE_DIR` stay in `.env`, because the login check, the settings file and the already stored images depend on them.
+
+> [!WARNING]
+> Settings saved in the admin panel, including the API key, are stored in `DATA_DIR/settings.json` (readable by the server's user only). Keep that folder out of backups or version control you share.
+
+### Choosing an inference endpoint
+
+`INFERENCE_ID` can point at any Elasticsearch inference endpoint that meets these requirements:
+
+| Requirement             | Why                                                                                                                |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `embedding` task type   | The app calls `POST _inference/embedding/<id>`. Endpoints for `text_embedding` or `sparse_embedding` are rejected. |
+| Accepts images and text | Photos are sent as base64 images. Text-only models (E5, ELSER, most text embedding APIs) can't embed them.         |
+| Returns dense vectors   | Vectors are stored in a `dense_vector` field for kNN. Sparse models such as ELSER don't fit.                       |
+
+In practice this means a multimodal model, such as Jina CLIP on the Elastic Inference Service. Only `.jina-clip-v2` has been tested.
+
+The vector size is detected automatically: creating the index embeds a test string and sizes the index to match. **Test connection** in the admin panel shows the size each endpoint returns and warns when it doesn't match the index.
+
+### Switching models
+
+Vectors from different models (or different sizes of the same model) aren't comparable, so switching needs a rebuild:
+
+1. On the admin panel's **Configuration** tab, change **Inference endpoint** and save.
+2. Click **Test connection**, then **Recreate index**. This deletes all indexed vectors.
+3. Re-upload your photos.
+
+From the command line instead: set `INFERENCE_ID` in `.env.local`, run `npm run setup-index -- --recreate` and restart the app.
+
+### Smaller vectors
+
+Jina CLIP v2 supports Matryoshka embeddings. To trade a little accuracy for a smaller index, create your own endpoint:
+
+```
+PUT _inference/embedding/jina-clip-v2-512
+{
+  "service": "elastic",
+  "service_settings": { "model_id": "jina-clip-v2", "dimensions": 512 }
+}
+```
+
+Then set `INFERENCE_ID=jina-clip-v2-512` and follow the steps in [Switching models](#switching-models).
+
+## Usage
+
+### Search page (`/`)
+
+- Upload a photo or type a description, then use **Find similar** on any result to search from it.
+- Scores are cosine similarity. Photo-to-photo matches usually score 0.5–1.0, and text-to-photo matches around 0.2–0.35, because CLIP puts text and images in the same space but not on top of each other.
+- **Minimum similarity** hides results below a score, without running a new search.
+
+### Admin panel (`/admin`)
+
+- Log in with `ADMIN_PASSWORD`. The session lasts 7 days.
+- **Photos** tab: drag and drop photos to index them. Uploads go in batches, and files already in the index are skipped.
+- **Configuration** tab (`/admin#configuration`):
+  - Change the Elasticsearch connection, index and inference endpoint. **Test connection** checks unsaved changes first, and can create or recreate the index.
+  - Turn search rate limiting on or off (this applies immediately) and set the number of searches allowed per minute, hour or day.
+  - Change the admin password.
+
+### Rate limiting
+
+When it's on, each visitor IP gets a fixed number of searches per window. Responses include `X-RateLimit-Limit`, `X-RateLimit-Remaining` and `X-RateLimit-Reset` headers. A visitor who goes over the limit gets `429 Too Many Requests` with `Retry-After`, and the UI shows a countdown. Logged-in admins are never limited.
+
+## API
+
+| Method | Route                    | Auth  | Description                                                                                 |
+| ------ | ------------------------ | ----- | ------------------------------------------------------------------------------------------- |
+| `POST` | `/api/search`            | –     | Form data: `mode` (`image` \| `text` \| `id`), `file` / `text` / `id`, `k`                  |
+| `GET`  | `/api/images/:file`      | –     | Serves a stored image                                                                       |
+| `POST` | `/api/auth/login`        | –     | JSON `{ "password": "..." }`, sets the session cookie                                       |
+| `POST` | `/api/auth/logout`       | –     | Clears the session cookie                                                                   |
+| `GET`  | `/api/ingest`            | admin | Number of indexed photos                                                                    |
+| `POST` | `/api/ingest`            | admin | Form data: one or more `files`                                                              |
+| `GET`  | `/api/admin/settings`    | admin | Current settings                                                                            |
+| `PUT`  | `/api/admin/settings`    | admin | JSON `{ "rateLimit": { "enabled", "maxRequests", "windowSeconds" } }`                       |
+| `GET`  | `/api/admin/config`      | admin | Current configuration and where each value comes from (no secrets)                          |
+| `PUT`  | `/api/admin/config`      | admin | JSON with any of `esEndpoint`, `esApiKey`, `esIndex`, `inferenceId` (`""` resets to `.env`) |
+| `POST` | `/api/admin/config/test` | admin | Same body as above, tests the connection without saving                                     |
+| `POST` | `/api/admin/index`       | admin | Create the index, or `{ "recreate": true }` to drop and recreate it                         |
+| `PUT`  | `/api/admin/password`    | admin | JSON `{ "current": "...", "next": "..." }`                                                  |
+
+Example text search:
+
+```bash
+curl -X POST http://localhost:3000/api/search -F mode=text -F text="sunset over the sea"
+```
+
+## Project structure
+
+```
+├── app/
+│   ├── page.tsx               Search page
+│   ├── admin/                 Admin panel and login
+│   ├── api/                   Route handlers
+│   ├── layout.tsx             Root layout (header, footer, theme)
+│   └── providers.tsx          EUI provider, SSR styles, color mode
+├── components/                EUI components (header, footer, results, settings)
+├── lib/
+│   ├── embeddings.ts          Elastic Inference Service client
+│   ├── es.ts                  Elasticsearch client and index mapping
+│   ├── indexer.ts             Dedupe, store, embed and bulk index
+│   ├── search.ts              kNN queries
+│   ├── auth.ts                Password check and signed session cookie
+│   ├── admin-password.ts      Password changed from the admin panel
+│   ├── config.ts              Admin panel overrides on top of .env
+│   ├── index-setup.ts         Connection test and index creation
+│   ├── rate-limit.ts          Per-IP rate limiter
+│   ├── settings.ts            Persisted admin settings
+│   └── types.ts               Types shared by the API and the UI
+├── middleware.ts              Protects /admin and admin APIs
+└── scripts/setup-index.ts     Index setup
+```
+
+## Development
+
+| Command                       | Description                                      |
+| ----------------------------- | ------------------------------------------------ |
+| `npm run dev`                 | Start the dev server                             |
+| `npm run build` / `npm start` | Production build and server                      |
+| `npm run setup-index`         | Create the index (`-- --recreate` to rebuild it) |
+| `npm run typecheck`           | Type-check with TypeScript                       |
+| `npm run lint`                | Lint with ESLint                                 |
+| `npm run format`              | Format with Prettier (`format:check` to verify)  |
+
+CI runs typecheck, lint, format check and build on every push and pull request.
+
+## Deployment notes
+
+- **Single server by default**: images and settings are stored on local disk, and the rate limiter runs in memory. To run several instances, move images to object storage (such as S3) and the rate limiter to a shared store (such as Redis).
+- **Security**: use a strong `ADMIN_PASSWORD` and serve the app over HTTPS. Session cookies are `httpOnly`, and `Secure` in production.
+- **Rebuild after changing `ADMIN_PASSWORD` or `SESSION_SECRET` in `.env`**: the middleware reads them at build time. Changes made in the admin panel apply immediately.
+
+## Contributing
+
+Contributions are welcome.
+
+1. Fork the repo and create a branch: `git checkout -b feature/my-change`
+2. Make your changes, then run `npm run typecheck && npm run lint && npm run format:check`
+3. Open a pull request that describes what changed and why
+
+For bugs and feature ideas, please open an issue first.
+
+## Acknowledgments
+
+- [Elastic](https://www.elastic.co): Elasticsearch, the Elastic Inference Service and [Elastic UI](https://eui.elastic.co)
+- [Jina AI](https://jina.ai): the [jina-clip-v2](https://jina.ai/models/jina-clip-v2/) multimodal embedding model
+
+## License
+
+[MIT](LICENSE)
+
+---
+
+<div align="center">
+<sub>Powered by <a href="https://www.elastic.co">Elastic</a></sub>
+</div>
