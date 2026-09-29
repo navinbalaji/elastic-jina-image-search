@@ -225,7 +225,8 @@ curl -X POST http://localhost:3000/api/search -F mode=text -F text="sunset over 
 │   ├── settings.ts            Persisted admin settings
 │   └── types.ts               Types shared by the API and the UI
 ├── middleware.ts              Protects /admin and admin APIs
-└── scripts/setup-index.ts     Index setup
+├── scripts/setup-index.ts     Index setup
+└── Dockerfile                 Production container image
 ```
 
 ## Development
@@ -241,11 +242,28 @@ curl -X POST http://localhost:3000/api/search -F mode=text -F text="sunset over 
 
 CI runs typecheck, lint, format check and build on every push and pull request.
 
+## Docker
+
+The [`Dockerfile`](Dockerfile) builds a small production image with Next.js standalone output. It runs as a non-root user on port 3000.
+
+```bash
+docker build -t image-search .
+```
+
+```bash
+docker run -d --name image-search -p 3000:3000 --env-file .env.local -v image-search-storage:/app/storage -v image-search-data:/app/data image-search
+```
+
+- **Settings**: pass them at run time with `--env-file` or `-e`. `.env` files are never copied into the image, and changing `ADMIN_PASSWORD` or `SESSION_SECRET` only needs a container restart, not a rebuild.
+- **Volumes**: `/app/storage` holds uploaded images and `/app/data` holds admin settings, including an API key saved in the admin panel. Keep both on volumes so they survive upgrades.
+- **Index setup**: with no index yet, open the admin panel's **Configuration** tab and use **Create index**.
+- **Networking**: the image makes Node try IPv4 first and wait up to 1 s per address, because Docker networks usually lack IPv6 and distant clusters can take longer than Node's 250 ms default to connect.
+
 ## Deployment notes
 
 - **Single server by default**: images and settings are stored on local disk, and the rate limiter runs in memory. To run several instances, move images to object storage (such as S3) and the rate limiter to a shared store (such as Redis).
 - **Security**: use a strong `ADMIN_PASSWORD` and serve the app over HTTPS. Session cookies are `httpOnly`, and `Secure` in production.
-- **Rebuild after changing `ADMIN_PASSWORD` or `SESSION_SECRET` in `.env`**: the middleware reads them at build time. Changes made in the admin panel apply immediately.
+- **Rebuild after changing `ADMIN_PASSWORD` or `SESSION_SECRET` in `.env`** (not needed with Docker): `next build` bakes values from `.env` files into the middleware. Changes made in the admin panel apply immediately.
 
 ## Contributing
 

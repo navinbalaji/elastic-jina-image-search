@@ -1,0 +1,20 @@
+# Keep secrets, local data and build output out of the image
+.env
+.env*.local
+storage
+data
+node_modules
+.next
+out
+*.tsbuildinfo
+next-env.d.ts
+
+.git
+.github
+.claude
+.vscode
+.idea
+.DS_Store
+npm-debug.log*
+Dockerfile
+.dockerignore
