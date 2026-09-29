@@ -166,7 +166,7 @@ Then set `INFERENCE_ID=jina-clip-v2-512` and follow the steps in [Switching mode
 
 - Upload a photo or type a description, then use **Find similar** on any result to search from it.
 - **Take a photo** opens the front (selfie) camera, and you can switch to the back camera. Browsers only allow the camera on HTTPS pages or `localhost`.
-- Scores are cosine similarity. Photo-to-photo matches usually score 0.5–1.0, and text-to-photo matches around 0.2–0.35, because the model puts text and images in the same space but not on top of each other.
+- Scores are cosine similarity. Photo-to-photo matches usually score 0.5–1.0, and text-to-photo matches around 0.2–0.45, because the model puts text and images in the same space but not on top of each other.
 - **Minimum similarity** hides results below a score, without running a new search.
 
 ### Admin panel (`/admin`)

@@ -5,7 +5,23 @@ import { testConnection } from '../lib/index-setup';
 import { readImage } from '../lib/storage';
 
 // Re-embed every indexed photo from its stored image with the current INFERENCE_ID, e.g. after switching models
-const BATCH = 8;
+const BATCH = 4;
+const RETRIES = 4;
+
+// The inference service throttles bursts with 429s, so wait and retry
+async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const status = (err as { meta?: { statusCode?: number } }).meta?.statusCode;
+      if (attempt > RETRIES || (status !== 429 && status !== 408 && status !== 503)) throw err;
+      const wait = 5000 * 2 ** (attempt - 1);
+      console.log(`  Throttled (${status}), retrying in ${wait / 1000}s`);
+      await new Promise((r) => setTimeout(r, wait));
+    }
+  }
+}
 
 async function main() {
   const [es, config] = await Promise.all([getEs(), getConfig()]);
@@ -43,7 +59,7 @@ async function main() {
     });
     if (found.length === 0) continue;
 
-    const vectors = await embedImages(found.map((f) => f.image));
+    const vectors = await withRetry(() => embedImages(found.map((f) => f.image)));
     const bulk = await es.bulk({
       operations: found.flatMap((f, k) => [
         { update: { _index: config.esIndex, _id: f.id } },
