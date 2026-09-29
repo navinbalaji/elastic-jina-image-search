@@ -40,7 +40,8 @@ export interface ConfigView {
   // The API key is never sent to the browser
   values: Record<Exclude<ConfigKey, 'esApiKey'>, string>;
   sources: Record<ConfigKey, ConfigSource>;
-  dataDir: string;
+  // Where admin settings are saved: a local path or an S3 URL
+  settingsLocation: string;
 }
 
 export interface ConnectionTest {

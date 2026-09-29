@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { imageStore } from './object-store';
 
 export const IMAGE_TYPES: Record<string, string> = {
   '.jpg': 'image/jpeg',
@@ -9,9 +9,6 @@ export const IMAGE_TYPES: Record<string, string> = {
   '.webp': 'image/webp',
   '.gif': 'image/gif',
 };
-
-// Env only: moving it at runtime would break every image already indexed
-export const STORAGE_DIR = process.env.STORAGE_DIR || './storage';
 
 const SAFE_FILE = /^[a-f0-9]{64}\.(jpg|jpeg|png|webp|gif)$/;
 
@@ -26,16 +23,11 @@ export function extensionFor(filename: string, contentType?: string): string | u
 }
 
 export async function saveImage(file: string, buffer: Buffer): Promise<void> {
-  await mkdir(STORAGE_DIR, { recursive: true });
-  await writeFile(path.join(STORAGE_DIR, file), buffer);
+  await imageStore.write(file, buffer, IMAGE_TYPES[path.extname(file)]);
 }
 
 export async function readImage(file: string): Promise<{ buffer: Buffer; contentType: string } | null> {
   if (!SAFE_FILE.test(file)) return null;
-  try {
-    const buffer = await readFile(path.join(STORAGE_DIR, file));
-    return { buffer, contentType: IMAGE_TYPES[path.extname(file)] };
-  } catch {
-    return null;
-  }
+  const buffer = await imageStore.read(file);
+  return buffer && { buffer, contentType: IMAGE_TYPES[path.extname(file)] };
 }

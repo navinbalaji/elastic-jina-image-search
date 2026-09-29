@@ -18,6 +18,7 @@
     "setup-index": "tsx --env-file=.env.local scripts/setup-index.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1142.0",
     "@elastic/datemath": "^5.0.3",
     "@elastic/elasticsearch": "^9.5.1",
     "@elastic/eui": "^122.1.0",

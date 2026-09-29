@@ -1,5 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import path from 'node:path';
+import { settingsStore } from './object-store';
 import type { ConfigUpdate, RateLimitSettings } from './types';
 
 export interface StoredSettings {
@@ -15,8 +14,7 @@ const DEFAULT_SETTINGS: StoredSettings = {
   config: {},
 };
 
-export const DATA_DIR = process.env.DATA_DIR || './data';
-const FILE = path.join(DATA_DIR, 'settings.json');
+const FILE = 'settings.json';
 const CACHE_MS = 2000;
 
 // Shared via globalThis since route handlers may be bundled separately
@@ -26,7 +24,8 @@ export async function getSettings(): Promise<StoredSettings> {
   if (g.__settings && Date.now() - g.__settings.at < CACHE_MS) return g.__settings.value;
   let value = DEFAULT_SETTINGS;
   try {
-    const saved = JSON.parse(await readFile(FILE, 'utf8')) as Partial<StoredSettings>;
+    const raw = await settingsStore.read(FILE);
+    const saved = (raw ? JSON.parse(raw.toString('utf8')) : {}) as Partial<StoredSettings>;
     value = {
       ...DEFAULT_SETTINGS,
       ...saved,
@@ -42,9 +41,7 @@ export async function getSettings(): Promise<StoredSettings> {
 
 export async function updateSettings(change: Partial<StoredSettings>): Promise<StoredSettings> {
   const settings = { ...(await getSettings()), ...change };
-  await mkdir(DATA_DIR, { recursive: true });
-  // Owner-only, since the file can hold the Elasticsearch API key
-  await writeFile(FILE, JSON.stringify(settings, null, 2), { mode: 0o600 });
+  await settingsStore.write(FILE, JSON.stringify(settings, null, 2), 'application/json');
   g.__settings = { value: settings, at: Date.now() };
   return settings;
 }

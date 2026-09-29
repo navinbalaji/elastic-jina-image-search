@@ -26,6 +26,7 @@ import { CameraCapture, CameraIcon } from '@/components/CameraCapture';
 import { ResultsGrid } from '@/components/ResultsGrid';
 import { ApiError, fetchJson } from '@/lib/api-client';
 import { errorMessage } from '@/lib/errors';
+import { shrinkImage } from '@/lib/resize-image';
 import type { SearchHit } from '@/lib/types';
 
 type Mode = 'image' | 'text';
@@ -69,7 +70,7 @@ export default function SearchPage() {
     const body = new FormData();
     body.set('mode', q.kind);
     body.set('k', String(MAX_RESULTS));
-    if (q.kind === 'image') body.set('file', q.file);
+    if (q.kind === 'image') body.set('file', await shrinkImage(q.file));
     if (q.kind === 'text') body.set('text', q.text);
     if (q.kind === 'id') body.set('id', q.id);
     try {

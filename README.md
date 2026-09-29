@@ -112,11 +112,13 @@ Settings come from environment variables (see [`.env.example`](.env.example)), a
 | `ADMIN_PASSWORD` | yes          | –               | can change     | Password for the admin panel                                    |
 | `SESSION_SECRET` | no           | admin password  | no             | Key for signing admin session cookies                           |
 | `DATA_DIR`       | no           | `./data`        | no             | Where admin panel settings are stored                           |
+| `S3_BUCKET`      | no           | –               | no             | Store images and settings in this S3 bucket instead of on disk  |
+| `S3_REGION`      | no           | AWS default     | no             | Region of `S3_BUCKET`                                           |
 
-`ADMIN_PASSWORD` is always needed to log in the first time. After you change the password in the admin panel, the new one is used for logging in, but sessions are still signed with the `.env` value. `SESSION_SECRET`, `DATA_DIR` and `STORAGE_DIR` stay in `.env`, because the login check, the settings file and the already stored images depend on them.
+`ADMIN_PASSWORD` is always needed to log in the first time. After you change the password in the admin panel, the new one is used for logging in, but sessions are still signed with the `.env` value. `SESSION_SECRET`, `DATA_DIR`, `STORAGE_DIR` and the S3 settings stay in `.env`, because the login check, the settings file and the already stored images depend on them.
 
 > [!WARNING]
-> Settings saved in the admin panel, including the API key, are stored in `DATA_DIR/settings.json` (readable by the server's user only). Keep that folder out of backups or version control you share.
+> Settings saved in the admin panel, including the API key, are stored in `DATA_DIR/settings.json` (readable by the server's user only), or at `settings/settings.json` in `S3_BUCKET`. Keep that folder out of backups or version control you share.
 
 ### Choosing an inference endpoint
 
@@ -223,6 +225,7 @@ curl -X POST http://localhost:3000/api/search -F mode=text -F text="sunset over 
 │   ├── index-setup.ts         Connection test and index creation
 │   ├── rate-limit.ts          Per-IP rate limiter
 │   ├── settings.ts            Persisted admin settings
+│   ├── object-store.ts        Local disk or S3 storage for images and settings
 │   └── types.ts               Types shared by the API and the UI
 ├── middleware.ts              Protects /admin and admin APIs
 ├── scripts/setup-index.ts     Index setup
@@ -259,9 +262,20 @@ docker run -d --name image-search -p 3000:3000 --env-file .env.local -v image-se
 - **Index setup**: with no index yet, open the admin panel's **Configuration** tab and use **Create index**.
 - **Networking**: the image makes Node try IPv4 first and wait up to 1 s per address, because Docker networks usually lack IPv6 and distant clusters can take longer than Node's 250 ms default to connect.
 
+## Deploy to AWS Amplify
+
+Amplify runs the server on short-lived functions with no lasting disk, so images and settings go to S3. [`amplify.yml`](amplify.yml) has the build settings.
+
+1. Create a private S3 bucket in the same region as the app.
+2. Create an IAM role that `amplify.amazonaws.com` can assume, allowing `s3:GetObject` and `s3:PutObject` on the bucket, and set it as the app's **compute role**.
+3. Create the Amplify app from your Git repository, with the **Web Compute** platform.
+4. Add the environment variables from the configuration table, including `S3_BUCKET` and `S3_REGION`. Amplify only passes them to the build, so [`scripts/amplify-env.mjs`](scripts/amplify-env.mjs) writes them into `.env.production` for the server.
+
+Each upload request stays under 4 MB, because serverless functions reject request bodies over about 6 MB. Search photos over 1 MB are shrunk in the browser first, but a single admin upload over about 6 MB may be rejected.
+
 ## Deployment notes
 
-- **Single server by default**: images and settings are stored on local disk, and the rate limiter runs in memory. To run several instances, move images to object storage (such as S3) and the rate limiter to a shared store (such as Redis).
+- **Several instances**: set `S3_BUCKET` so every instance shares images and settings. The rate limiter runs in memory, so on Amplify or behind a load balancer each instance counts separately; move it to a shared store (such as Redis) for strict limits.
 - **Security**: use a strong `ADMIN_PASSWORD` and serve the app over HTTPS. Session cookies are `httpOnly`, and `Secure` in production.
 - **Rebuild after changing `ADMIN_PASSWORD` or `SESSION_SECRET` in `.env`** (not needed with Docker): `next build` bakes values from `.env` files into the middleware. Changes made in the admin panel apply immediately.
 

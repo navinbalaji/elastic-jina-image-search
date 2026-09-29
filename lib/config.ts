@@ -1,4 +1,5 @@
-import { DATA_DIR, getSettings } from './settings';
+import { DATA_DIR, USES_S3 } from './object-store';
+import { getSettings } from './settings';
 import type { ConfigKey, ConfigSource, ConfigUpdate, ConfigView } from './types';
 
 export interface AppConfig {
@@ -54,7 +55,7 @@ export async function describeConfig(): Promise<ConfigView> {
       inferenceId: resolved.inferenceId.value ?? '',
     },
     sources: Object.fromEntries(KEYS.map((k) => [k, resolved[k].source])) as ConfigView['sources'],
-    dataDir: DATA_DIR,
+    settingsLocation: USES_S3 ? `s3://${process.env.S3_BUCKET}/settings/settings.json` : `${DATA_DIR}/settings.json`,
   };
 }
 

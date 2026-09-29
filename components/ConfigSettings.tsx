@@ -145,8 +145,8 @@ export function ConfigSettings({ onUnauthorized, onChanged }: ConfigSettingsProp
       <EuiText size="s" color="subdued">
         <p>
           Settings saved here override <code>.env</code> and are stored in{' '}
-          <code>{view ? `${view.dataDir}/settings.json` : 'settings.json'}</code> on the server, including the API key.
-          Empty a field to go back to the <code>.env</code> value or the default.
+          <code>{view?.settingsLocation ?? 'settings.json'}</code>, including the API key. Empty a field to go back to
+          the <code>.env</code> value or the default.
         </p>
       </EuiText>
       <EuiSpacer size="m" />
@@ -268,8 +268,8 @@ export function ConfigSettings({ onUnauthorized, onChanged }: ConfigSettingsProp
           defaultFocusedButton="cancel"
         >
           <p>
-            All {test.docCount ?? 0} indexed photos will be removed from search. Their image files stay on the server,
-            but you&apos;ll need to upload them again.
+            All {test.docCount ?? 0} indexed photos will be removed from search. Their image files are kept, but
+            you&apos;ll need to upload them again.
           </p>
         </EuiConfirmModal>
       )}

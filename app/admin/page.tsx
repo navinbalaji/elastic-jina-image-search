@@ -30,6 +30,26 @@ import type { IngestResult, IngestStatus } from '@/lib/types';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 const BATCH_SIZE = 8;
+// Serverless hosts such as Amplify reject request bodies over about 6 MB
+const BATCH_BYTES = 4 * 1024 * 1024;
+
+// Group files into requests of at most BATCH_SIZE files and BATCH_BYTES (a larger file goes alone)
+function toBatches(files: File[]): File[][] {
+  const batches: File[][] = [];
+  let current: File[] = [];
+  let bytes = 0;
+  for (const file of files) {
+    if (current.length && (current.length === BATCH_SIZE || bytes + file.size > BATCH_BYTES)) {
+      batches.push(current);
+      current = [];
+      bytes = 0;
+    }
+    current.push(file);
+    bytes += file.size;
+  }
+  if (current.length) batches.push(current);
+  return batches;
+}
 
 const STATUS: Record<IngestStatus, { color: string; label: string }> = {
   indexed: { color: 'success', label: 'Indexed' },
@@ -105,11 +125,11 @@ export default function AdminPage() {
   }
 
   async function upload() {
-    const queue = [...files];
+    const total = files.length;
+    let done = 0;
     setResults([]);
-    setProgress({ done: 0, total: queue.length });
-    for (let i = 0; i < queue.length; i += BATCH_SIZE) {
-      const batch = queue.slice(i, i + BATCH_SIZE);
+    setProgress({ done, total });
+    for (const batch of toBatches(files)) {
       const body = new FormData();
       batch.forEach((f) => body.append('files', f));
       let batchResults: IngestResult[];
@@ -123,7 +143,8 @@ export default function AdminPage() {
         batchResults = batch.map((f) => ({ filename: f.name, status: 'error', error: errorMessage(err) }));
       }
       setResults((prev) => [...prev, ...batchResults]);
-      setProgress({ done: Math.min(i + BATCH_SIZE, queue.length), total: queue.length });
+      done += batch.length;
+      setProgress({ done, total });
     }
     setFiles([]);
     picker.current?.removeFiles();
