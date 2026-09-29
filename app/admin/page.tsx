@@ -22,10 +22,12 @@ import {
 } from '@elastic/eui';
 import { useRouter } from 'next/navigation';
 import { ConfigSettings } from '@/components/ConfigSettings';
+import { FaceScan } from '@/components/FaceScan';
 import { PasswordSettings } from '@/components/PasswordSettings';
 import { RateLimitSettings } from '@/components/RateLimitSettings';
 import { ApiError, fetchJson } from '@/lib/api-client';
 import { errorMessage } from '@/lib/errors';
+import { detectFaces, loadImage, uploadFaces } from '@/lib/face-detect';
 import type { IngestResult, IngestStatus } from '@/lib/types';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -78,6 +80,7 @@ const columns: EuiBasicTableColumn<IngestResult>[] = [
     width: '160px',
     render: (status: IngestStatus) => <EuiHealth color={STATUS[status].color}>{STATUS[status].label}</EuiHealth>,
   },
+  { field: 'faces', name: 'Faces', width: '80px', render: (n?: number) => n ?? '–' },
   { field: 'error', name: 'Details', truncateText: true, render: (e?: string) => e ?? '' },
 ];
 
@@ -88,6 +91,8 @@ export default function AdminPage() {
   const [count, setCount] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('photos');
+  // Bumped after each upload so the face scan recounts
+  const [uploads, setUploads] = useState(0);
   const picker = useRef<EuiFilePickerRef>(null);
   const router = useRouter();
 
@@ -142,6 +147,16 @@ export default function AdminPage() {
         if (err instanceof ApiError && err.status === 401) return toLogin();
         batchResults = batch.map((f) => ({ filename: f.name, status: 'error', error: errorMessage(err) }));
       }
+      // Find and store faces for newly indexed photos
+      for (const [k, r] of batchResults.entries()) {
+        if (r.status !== 'indexed' || !r.id) continue;
+        try {
+          r.faces = await uploadFaces(r.id, await detectFaces(await loadImage(batch[k])));
+        } catch (err) {
+          if (err instanceof ApiError && err.status === 401) return toLogin();
+          r.error = `Face scan failed: ${errorMessage(err)}`;
+        }
+      }
       setResults((prev) => [...prev, ...batchResults]);
       done += batch.length;
       setProgress({ done, total });
@@ -150,6 +165,7 @@ export default function AdminPage() {
     picker.current?.removeFiles();
     setProgress(null);
     refreshCount();
+    setUploads((n) => n + 1);
   }
 
   const busy = progress !== null;
@@ -237,6 +253,9 @@ export default function AdminPage() {
                 <EuiBasicTable items={results} columns={columns} tableCaption="Upload results" />
               </>
             )}
+
+            <EuiSpacer />
+            <FaceScan onUnauthorized={toLogin} refreshKey={uploads} />
           </>
         ) : (
           <>

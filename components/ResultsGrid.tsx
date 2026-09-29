@@ -3,7 +3,7 @@
 import { EuiBadge, EuiButtonEmpty, EuiCard, EuiFlexGrid, EuiFlexItem, EuiImage, EuiToolTip } from '@elastic/eui';
 import type { SearchHit } from '@/lib/types';
 
-// Elasticsearch cosine score is (1 + cos) / 2
+// Scores are cosine similarity
 function formatScore(score: number) {
   return `${(score * 100).toFixed(1)}%`;
 }
@@ -12,6 +12,13 @@ function scoreColor(score: number) {
   if (score >= 0.8) return 'success';
   if (score >= 0.5) return 'primary';
   return 'hollow';
+}
+
+// Keep the matched face in view when the thumbnail is cropped to a square
+function facePosition(hit: SearchHit) {
+  if (!hit.face) return undefined;
+  const [x, y, w, h] = hit.face.box;
+  return `${((x + w / 2) * 100).toFixed(1)}% ${((y + h / 2) * 100).toFixed(1)}%`;
 }
 
 interface ResultsGridProps {
@@ -34,7 +41,7 @@ export function ResultsGrid({ hits, onFindSimilar }: ResultsGridProps) {
                 allowFullScreen
                 size="fullWidth"
                 wrapperProps={{ style: { width: '100%' } }}
-                style={{ aspectRatio: '1 / 1', objectFit: 'cover' }}
+                style={{ aspectRatio: '1 / 1', objectFit: 'cover', objectPosition: facePosition(hit) }}
               />
             }
             title={
@@ -48,8 +55,13 @@ export function ResultsGrid({ hits, onFindSimilar }: ResultsGridProps) {
             titleSize="xs"
             description={<EuiBadge color={scoreColor(hit.score)}>{formatScore(hit.score)} match</EuiBadge>}
             footer={
-              <EuiButtonEmpty size="xs" iconType="search" flush="left" onClick={() => onFindSimilar(hit)}>
-                Find similar
+              <EuiButtonEmpty
+                size="xs"
+                iconType={hit.face ? 'user' : 'search'}
+                flush="left"
+                onClick={() => onFindSimilar(hit)}
+              >
+                {hit.face ? 'Find this face' : 'Find similar'}
               </EuiButtonEmpty>
             }
           />

@@ -1,11 +1,27 @@
 // Types shared by the API routes and the UI (keep this file free of server-only imports)
 
+// Face position as fractions of the photo: [x, y, width, height]
+export type FaceBox = [number, number, number, number];
+
 export interface SearchHit {
   id: string;
   filename: string;
   url: string;
   score: number;
+  // Best matching face, for face searches
+  face?: { index: number; box: FaceBox };
 }
+
+// An indexed photo whose faces haven't been scanned yet
+export interface PendingPhoto {
+  id: string;
+  filename: string;
+  url: string;
+}
+
+export const MAX_FACES_PER_PHOTO = 50;
+// Detector confidence below which a "face" is usually a hand, a phone or the back of a head
+export const MIN_FACE_CONFIDENCE = 0.7;
 
 export type IngestStatus = 'indexed' | 'duplicate' | 'error';
 
@@ -14,6 +30,8 @@ export interface IngestResult {
   id?: string;
   status: IngestStatus;
   error?: string;
+  // Faces found, once the photo has been scanned
+  faces?: number;
 }
 
 export interface RateLimitSettings {

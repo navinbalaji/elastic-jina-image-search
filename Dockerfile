@@ -28,6 +28,7 @@ ENV NODE_ENV=production \
 
 COPY --from=build --chown=node:node /app/.next/standalone ./
 COPY --from=build --chown=node:node /app/.next/static ./.next/static
+COPY --from=build --chown=node:node /app/public ./public
 RUN mkdir -p storage data && chown node:node storage data
 
 # Uploaded images and admin settings live here

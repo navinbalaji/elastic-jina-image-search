@@ -63,7 +63,8 @@ async function main() {
     const bulk = await es.bulk({
       operations: found.flatMap((f, k) => [
         { update: { _index: config.esIndex, _id: f.id } },
-        { doc: { clip_vector: vectors[k] } },
+        // Face vectors from the old model no longer match, so the photo goes back to the face scan queue
+        { doc: { clip_vector: vectors[k], faces: [], face_count: null } },
       ]),
     });
     if (bulk.errors) throw new Error('Some updates failed: ' + JSON.stringify(bulk.items.find((i) => i.update?.error)));
@@ -73,7 +74,7 @@ async function main() {
 
   await es.closePointInTime({ id: pit.id });
   await es.indices.refresh({ index: config.esIndex });
-  console.log(`Done: ${done} re-embedded.`);
+  console.log(`Done: ${done} re-embedded. Open the admin panel and scan them for faces again.`);
   if (missing.length) console.log(`No stored image for ${missing.length}, left unchanged: ${missing.join(', ')}`);
 }
 

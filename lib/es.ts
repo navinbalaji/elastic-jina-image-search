@@ -1,5 +1,6 @@
 import { Client } from '@elastic/elasticsearch';
 import { getConfig } from './config';
+import type { FaceBox } from './types';
 
 export function createClient(endpoint?: string, apiKey?: string): Client {
   if (!endpoint) throw new Error('Elasticsearch endpoint is not set (admin panel, ES_URL or ES_CLOUD_ID)');
@@ -32,6 +33,30 @@ export interface PhotoDoc {
   size: number;
   created_at: string;
   clip_vector: number[];
+  // One entry per face; set with face_count once the photo has been scanned
+  faces?: FaceDoc[];
+  face_count?: number;
+}
+
+export interface FaceDoc {
+  box: FaceBox;
+  score: number;
+  vector: number[];
+}
+
+// Faces are nested so kNN ranks each photo by its best matching face
+export function faceMappings(dims: number) {
+  return {
+    face_count: { type: 'integer' },
+    faces: {
+      type: 'nested',
+      properties: {
+        box: { type: 'float', index: false },
+        score: { type: 'float', index: false },
+        vector: { type: 'dense_vector', dims, index: true, similarity: 'cosine' },
+      },
+    },
+  } as const;
 }
 
 export function indexMappings(dims: number) {
@@ -43,6 +68,7 @@ export function indexMappings(dims: number) {
       size: { type: 'long' },
       created_at: { type: 'date' },
       clip_vector: { type: 'dense_vector', dims, index: true, similarity: 'cosine' },
+      ...faceMappings(dims),
     },
   } as const;
 }

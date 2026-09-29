@@ -30,7 +30,7 @@ export async function knnSearch(
 }
 
 // Elasticsearch scores cosine kNN as (1 + cosine) / 2, so convert back to raw similarity
-function toCosine(score: number) {
+export function toCosine(score: number) {
   return Math.max(0, 2 * score - 1);
 }
 

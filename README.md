@@ -21,6 +21,7 @@ Built with Elasticsearch kNN, Jina embeddings v5 omni on the Elastic Inference S
 - 🖼️ **Search by image**: drop in a photo and get visually similar images back.
 - 📷 **Camera search**: take a photo in the browser and search with it. The front (selfie) camera opens first.
 - 💬 **Search by text**: describe what you're looking for ("man in a blue suit on stage").
+- 🙂 **Face search**: find photos of the same person, including in group photos. Every face is cropped and embedded separately.
 - 🔁 **Find similar**: jump from any result to images like it.
 - 🔐 **Admin panel**: password-protected bulk upload, with duplicate detection and progress tracking.
 - 🚦 **Rate limiting**: per-visitor search limits, which you can turn on or off and tune from the admin panel.
@@ -53,7 +54,18 @@ flowchart LR
 Because the model puts images and text in one shared space, the same index serves both image-to-image and text-to-image search.
 
 > [!NOTE]
-> The model finds _visually_ similar photos: the same scene, clothing or look. It doesn't do face recognition.
+> Image search finds _visually_ similar photos: the same scene, clothing or look. To find the same person, use face search.
+
+### Face search
+
+1. **Detecting**: when a photo is uploaded, the browser finds every face with an SSD MobileNet detector ([face-api](https://github.com/vladmandic/face-api)) and crops each one, so a group photo gives one crop per person. Detections below 70% confidence, which are often hands, phones or the backs of heads, are dropped.
+2. **Embedding**: each crop is embedded with the same inference endpoint and stored as its own vector in a `nested` `faces` field on the photo.
+3. **Searching**: the query face (from an upload or a selfie) is embedded the same way. A nested kNN search finds candidate photos, and every face in them is re-scored after subtracting the average face. General-purpose embeddings put all faces close together (cosine 0.85–0.98), and centering spreads them out: the same person usually scores 0.4–0.8 and other people below 0.3.
+
+Jina embeddings aren't a dedicated face recognition model, so treat matches as "looks like the same person". Clear, front-facing faces work best, and small or blurry faces in the background match poorly.
+
+> [!IMPORTANT]
+> Face vectors are biometric data. Only index photos of people who agreed to it, and tell your visitors that face search is available.
 
 ## Quick start
 
@@ -143,6 +155,7 @@ Vectors from different models (or different sizes of the same model) aren't comp
 1. Set `INFERENCE_ID` in `.env.local`, or change **Inference endpoint** on the admin panel's **Configuration** tab.
 2. Run `npm run reembed`. With S3 storage, also set `S3_BUCKET`, `S3_REGION` and AWS credentials (such as `AWS_PROFILE`) so it can read the images.
 3. Restart or redeploy the app. Searches return poor results between steps 1 and 2.
+4. Faces are cropped in the browser, so `reembed` clears them. On the admin **Photos** tab, click **Scan for faces**.
 
 **Different vector size**: on the **Configuration** tab click **Test connection**, then **Recreate index** (this deletes all indexed vectors), and re-upload your photos. From the command line: `npm run setup-index -- --recreate`.
 
@@ -166,13 +179,15 @@ Then set `INFERENCE_ID=jina-clip-v2-512` and follow the steps in [Switching mode
 
 - Upload a photo or type a description, then use **Find similar** on any result to search from it.
 - **Take a photo** opens the front (selfie) camera, and you can switch to the back camera. Browsers only allow the camera on HTTPS pages or `localhost`.
+- **Face** tab: upload a photo or take a selfie. With several people in the photo, pick the face to search for. Results are centred on the matching face, and **Find this face** searches from it. The minimum similarity starts at 40% here, since lower matches are usually someone else.
 - Scores are cosine similarity. Photo-to-photo matches usually score 0.5–1.0, and text-to-photo matches around 0.2–0.45, because the model puts text and images in the same space but not on top of each other.
 - **Minimum similarity** hides results below a score, without running a new search.
 
 ### Admin panel (`/admin`)
 
 - Log in with `ADMIN_PASSWORD`. The session lasts 7 days.
-- **Photos** tab: drag and drop photos to index them. Uploads go in batches, and files already in the index are skipped.
+- **Photos** tab: drag and drop photos to index them. Uploads go in batches, and files already in the index are skipped. Faces are found and stored right after each upload; the **Faces** column shows how many.
+- **Face search** panel: **Scan for faces** processes photos indexed before face search, or whose scan failed.
 - **Configuration** tab (`/admin#configuration`):
   - Change the Elasticsearch connection, index and inference endpoint. **Test connection** checks unsaved changes first, and can create or recreate the index.
   - Turn search rate limiting on or off (this applies immediately) and set the number of searches allowed per minute, hour or day.
@@ -184,21 +199,23 @@ When it's on, each visitor IP gets a fixed number of searches per window. Respon
 
 ## API
 
-| Method | Route                    | Auth  | Description                                                                                 |
-| ------ | ------------------------ | ----- | ------------------------------------------------------------------------------------------- |
-| `POST` | `/api/search`            | –     | Form data: `mode` (`image` \| `text` \| `id`), `file` / `text` / `id`, `k`                  |
-| `GET`  | `/api/images/:file`      | –     | Serves a stored image                                                                       |
-| `POST` | `/api/auth/login`        | –     | JSON `{ "password": "..." }`, sets the session cookie                                       |
-| `POST` | `/api/auth/logout`       | –     | Clears the session cookie                                                                   |
-| `GET`  | `/api/ingest`            | admin | Number of indexed photos                                                                    |
-| `POST` | `/api/ingest`            | admin | Form data: one or more `files`                                                              |
-| `GET`  | `/api/admin/settings`    | admin | Current settings                                                                            |
-| `PUT`  | `/api/admin/settings`    | admin | JSON `{ "rateLimit": { "enabled", "maxRequests", "windowSeconds" } }`                       |
-| `GET`  | `/api/admin/config`      | admin | Current configuration and where each value comes from (no secrets)                          |
-| `PUT`  | `/api/admin/config`      | admin | JSON with any of `esEndpoint`, `esApiKey`, `esIndex`, `inferenceId` (`""` resets to `.env`) |
-| `POST` | `/api/admin/config/test` | admin | Same body as above, tests the connection without saving                                     |
-| `POST` | `/api/admin/index`       | admin | Create the index, or `{ "recreate": true }` to drop and recreate it                         |
-| `PUT`  | `/api/admin/password`    | admin | JSON `{ "current": "...", "next": "..." }`                                                  |
+| Method | Route                    | Auth  | Description                                                                                                        |
+| ------ | ------------------------ | ----- | ------------------------------------------------------------------------------------------------------------------ |
+| `POST` | `/api/search`            | –     | Form data: `mode` (`image` \| `text` \| `id` \| `face` \| `face-id`), `file` / `text` / `id` (+ `face` index), `k` |
+| `GET`  | `/api/images/:file`      | –     | Serves a stored image                                                                                              |
+| `POST` | `/api/auth/login`        | –     | JSON `{ "password": "..." }`, sets the session cookie                                                              |
+| `POST` | `/api/auth/logout`       | –     | Clears the session cookie                                                                                          |
+| `GET`  | `/api/ingest`            | admin | Number of indexed photos                                                                                           |
+| `POST` | `/api/ingest`            | admin | Form data: one or more `files`                                                                                     |
+| `GET`  | `/api/admin/settings`    | admin | Current settings                                                                                                   |
+| `PUT`  | `/api/admin/settings`    | admin | JSON `{ "rateLimit": { "enabled", "maxRequests", "windowSeconds" } }`                                              |
+| `GET`  | `/api/admin/config`      | admin | Current configuration and where each value comes from (no secrets)                                                 |
+| `PUT`  | `/api/admin/config`      | admin | JSON with any of `esEndpoint`, `esApiKey`, `esIndex`, `inferenceId` (`""` resets to `.env`)                        |
+| `POST` | `/api/admin/config/test` | admin | Same body as above, tests the connection without saving                                                            |
+| `POST` | `/api/admin/index`       | admin | Create the index, or `{ "recreate": true }` to drop and recreate it                                                |
+| `PUT`  | `/api/admin/password`    | admin | JSON `{ "current": "...", "next": "..." }`                                                                         |
+| `GET`  | `/api/admin/faces`       | admin | Photos not yet scanned for faces (`?limit=`)                                                                       |
+| `POST` | `/api/admin/faces`       | admin | Form data: `id`, `faces` (JSON `[{ box, score }]`) and one `crop` JPEG per face                                    |
 
 Example text search:
 
@@ -215,12 +232,15 @@ curl -X POST http://localhost:3000/api/search -F mode=text -F text="sunset over 
 │   ├── api/                   Route handlers
 │   ├── layout.tsx             Root layout (header, footer, theme)
 │   └── providers.tsx          EUI provider, SSR styles, color mode
-├── components/                EUI components (header, footer, camera, results, settings)
+├── components/                EUI components (header, footer, camera, results, face scan, settings)
 ├── lib/
 │   ├── embeddings.ts          Elastic Inference Service client
 │   ├── es.ts                  Elasticsearch client and index mapping
 │   ├── indexer.ts             Dedupe, store, embed and bulk index
 │   ├── search.ts              kNN queries
+│   ├── face-detect.ts         Browser face detection and cropping
+│   ├── faces.ts               Face storage and search
+│   ├── face-stats.ts          Average face used to re-score matches
 │   ├── auth.ts                Password check and signed session cookie
 │   ├── admin-password.ts      Password changed from the admin panel
 │   ├── config.ts              Admin panel overrides on top of .env

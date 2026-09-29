@@ -12,3 +12,25 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Face picker thumbnails on the search page */
+.face-choice {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: pointer;
+  background: none;
+}
+.face-choice:hover,
+.face-choice:focus-visible {
+  border-color: #0b64dd;
+}
+.face-choice img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+}
