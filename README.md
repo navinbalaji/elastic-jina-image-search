@@ -4,7 +4,7 @@
 
 **Reverse image search powered by Elastic.** Upload a photo or describe one in words, and find the most similar images in your library.
 
-Built with Elasticsearch kNN, Jina CLIP v2 on the Elastic Inference Service, and Elastic UI.
+Built with Elasticsearch kNN, Jina embeddings v5 omni on the Elastic Inference Service, and Elastic UI.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Elasticsearch](https://img.shields.io/badge/Elasticsearch-9.x-005571?logo=elasticsearch)](https://www.elastic.co/elasticsearch)
@@ -20,13 +20,13 @@ Built with Elasticsearch kNN, Jina CLIP v2 on the Elastic Inference Service, and
 
 - 🖼️ **Search by image**: drop in a photo and get visually similar images back.
 - 📷 **Camera search**: take a photo in the browser and search with it. The front (selfie) camera opens first.
-- 💬 **Search by text**: describe what you're looking for ("man in a blue suit on stage") in any of 89 languages.
+- 💬 **Search by text**: describe what you're looking for ("man in a blue suit on stage").
 - 🔁 **Find similar**: jump from any result to images like it.
 - 🔐 **Admin panel**: password-protected bulk upload, with duplicate detection and progress tracking.
 - 🚦 **Rate limiting**: per-visitor search limits, which you can turn on or off and tune from the admin panel.
 - 🌗 **Dark mode**: follows your system theme, with a one-click toggle.
 - 📱 **Mobile friendly**: works on phones and tablets as well as desktop.
-- ☁️ **Nothing extra to host**: embeddings come from Elastic Cloud's managed `.jina-clip-v2` endpoint, so there are no GPUs, model servers or third-party API keys.
+- ☁️ **Nothing extra to host**: embeddings come from Elastic Cloud's managed `.jina-embeddings-v5-omni-small` endpoint, so there are no GPUs, model servers or third-party API keys.
 
 ## How it works
 
@@ -37,7 +37,7 @@ flowchart LR
         A[Admin panel] --> I["/api/ingest"]
     end
     subgraph Elastic[Elastic Cloud]
-        EIS[Elastic Inference Service<br/>.jina-clip-v2]
+        EIS[Elastic Inference Service<br/>.jina-embeddings-v5-omni-small]
         ES[(Elasticsearch<br/>dense_vector index)]
     end
     I -- image --> EIS
@@ -47,20 +47,20 @@ flowchart LR
     S -- kNN query --> ES
 ```
 
-1. **Indexing**: each uploaded photo is hashed (SHA-256) to skip duplicates, embedded by Jina CLIP v2 on the Elastic Inference Service, and stored in a `dense_vector` field (cosine similarity, HNSW).
+1. **Indexing**: each uploaded photo is hashed (SHA-256) to skip duplicates, embedded by Jina embeddings v5 omni (small) on the Elastic Inference Service, and stored in a `dense_vector` field (cosine similarity, HNSW).
 2. **Searching**: the query photo or text is embedded into the same vector space, and Elasticsearch runs an approximate kNN search to return the nearest images.
 
-Because CLIP puts images and text in one shared space, the same index serves both image-to-image and text-to-image search.
+Because the model puts images and text in one shared space, the same index serves both image-to-image and text-to-image search.
 
 > [!NOTE]
-> CLIP finds _visually_ similar photos: the same scene, clothing or look. It doesn't do face recognition.
+> The model finds _visually_ similar photos: the same scene, clothing or look. It doesn't do face recognition.
 
 ## Quick start
 
 ### Prerequisites
 
 - [Node.js](https://nodejs.org) 20 or later
-- An [Elastic Cloud](https://cloud.elastic.co/registration) deployment or Serverless project. The `.jina-clip-v2` inference endpoint comes preconfigured.
+- An [Elastic Cloud](https://cloud.elastic.co/registration) deployment or Serverless project. The `.jina-embeddings-v5-omni-small` inference endpoint comes preconfigured.
 - An Elasticsearch [API key](https://www.elastic.co/docs/deploy-manage/api-keys/elasticsearch-api-keys)
 
 ### Setup
@@ -101,19 +101,19 @@ Open **http://localhost:3000/admin** to upload photos, then **http://localhost:3
 
 Settings come from environment variables (see [`.env.example`](.env.example)), and most of them can also be changed on the admin panel's **Configuration** tab. A value saved in the admin panel overrides the environment variable, and emptying the field goes back to it.
 
-| Variable         | Required     | Default         | In admin panel | Description                                                     |
-| ---------------- | ------------ | --------------- | -------------- | --------------------------------------------------------------- |
-| `ES_URL`         | one of these | –               | yes            | Elasticsearch endpoint URL (Serverless, hosted or self-managed) |
-| `ES_CLOUD_ID`    | one of these | –               | yes            | Cloud ID of an Elastic Cloud hosted deployment                  |
-| `ES_API_KEY`     | yes          | –               | yes            | Elasticsearch API key                                           |
-| `ES_INDEX`       | no           | `photos`        | yes            | Index name                                                      |
-| `INFERENCE_ID`   | no           | `.jina-clip-v2` | yes            | Inference endpoint for image and text embeddings                |
-| `STORAGE_DIR`    | no           | `./storage`     | no             | Where uploaded images are stored                                |
-| `ADMIN_PASSWORD` | yes          | –               | can change     | Password for the admin panel                                    |
-| `SESSION_SECRET` | no           | admin password  | no             | Key for signing admin session cookies                           |
-| `DATA_DIR`       | no           | `./data`        | no             | Where admin panel settings are stored                           |
-| `S3_BUCKET`      | no           | –               | no             | Store images and settings in this S3 bucket instead of on disk  |
-| `S3_REGION`      | no           | AWS default     | no             | Region of `S3_BUCKET`                                           |
+| Variable         | Required     | Default                          | In admin panel | Description                                                     |
+| ---------------- | ------------ | -------------------------------- | -------------- | --------------------------------------------------------------- |
+| `ES_URL`         | one of these | –                                | yes            | Elasticsearch endpoint URL (Serverless, hosted or self-managed) |
+| `ES_CLOUD_ID`    | one of these | –                                | yes            | Cloud ID of an Elastic Cloud hosted deployment                  |
+| `ES_API_KEY`     | yes          | –                                | yes            | Elasticsearch API key                                           |
+| `ES_INDEX`       | no           | `photos`                         | yes            | Index name                                                      |
+| `INFERENCE_ID`   | no           | `.jina-embeddings-v5-omni-small` | yes            | Inference endpoint for image and text embeddings                |
+| `STORAGE_DIR`    | no           | `./storage`                      | no             | Where uploaded images are stored                                |
+| `ADMIN_PASSWORD` | yes          | –                                | can change     | Password for the admin panel                                    |
+| `SESSION_SECRET` | no           | admin password                   | no             | Key for signing admin session cookies                           |
+| `DATA_DIR`       | no           | `./data`                         | no             | Where admin panel settings are stored                           |
+| `S3_BUCKET`      | no           | –                                | no             | Store images and settings in this S3 bucket instead of on disk  |
+| `S3_REGION`      | no           | AWS default                      | no             | Region of `S3_BUCKET`                                           |
 
 `ADMIN_PASSWORD` is always needed to log in the first time. After you change the password in the admin panel, the new one is used for logging in, but sessions are still signed with the `.env` value. `SESSION_SECRET`, `DATA_DIR`, `STORAGE_DIR` and the S3 settings stay in `.env`, because the login check, the settings file and the already stored images depend on them.
 
@@ -130,23 +130,25 @@ Settings come from environment variables (see [`.env.example`](.env.example)), a
 | Accepts images and text | Photos are sent as base64 images. Text-only models (E5, ELSER, most text embedding APIs) can't embed them.         |
 | Returns dense vectors   | Vectors are stored in a `dense_vector` field for kNN. Sparse models such as ELSER don't fit.                       |
 
-In practice this means a multimodal model, such as Jina CLIP on the Elastic Inference Service. Only `.jina-clip-v2` has been tested.
+In practice this means a multimodal model on the Elastic Inference Service. `.jina-embeddings-v5-omni-small` (the default) and `.jina-clip-v2` have been tested; `.jina-embeddings-v5-omni-nano` is a smaller, faster option.
 
 The vector size is detected automatically: creating the index embeds a test string and sizes the index to match. **Test connection** in the admin panel shows the size each endpoint returns and warns when it doesn't match the index.
 
 ### Switching models
 
-Vectors from different models (or different sizes of the same model) aren't comparable, so switching needs a rebuild:
+Vectors from different models (or different sizes of the same model) aren't comparable, so every photo has to be embedded again.
 
-1. On the admin panel's **Configuration** tab, change **Inference endpoint** and save.
-2. Click **Test connection**, then **Recreate index**. This deletes all indexed vectors.
-3. Re-upload your photos.
+**Same vector size** (for example `.jina-clip-v2` and `.jina-embeddings-v5-omni-small`, both 1024-d): re-embed in place from the stored images, with no re-uploading.
 
-From the command line instead: set `INFERENCE_ID` in `.env.local`, run `npm run setup-index -- --recreate` and restart the app.
+1. Set `INFERENCE_ID` in `.env.local`, or change **Inference endpoint** on the admin panel's **Configuration** tab.
+2. Run `npm run reembed`. With S3 storage, also set `S3_BUCKET`, `S3_REGION` and AWS credentials (such as `AWS_PROFILE`) so it can read the images.
+3. Restart or redeploy the app. Searches return poor results between steps 1 and 2.
+
+**Different vector size**: on the **Configuration** tab click **Test connection**, then **Recreate index** (this deletes all indexed vectors), and re-upload your photos. From the command line: `npm run setup-index -- --recreate`.
 
 ### Smaller vectors
 
-Jina CLIP v2 supports Matryoshka embeddings. To trade a little accuracy for a smaller index, create your own endpoint:
+Some models, such as Jina CLIP v2, support Matryoshka embeddings. To trade a little accuracy for a smaller index, create your own endpoint:
 
 ```
 PUT _inference/embedding/jina-clip-v2-512
@@ -164,7 +166,7 @@ Then set `INFERENCE_ID=jina-clip-v2-512` and follow the steps in [Switching mode
 
 - Upload a photo or type a description, then use **Find similar** on any result to search from it.
 - **Take a photo** opens the front (selfie) camera, and you can switch to the back camera. Browsers only allow the camera on HTTPS pages or `localhost`.
-- Scores are cosine similarity. Photo-to-photo matches usually score 0.5–1.0, and text-to-photo matches around 0.2–0.35, because CLIP puts text and images in the same space but not on top of each other.
+- Scores are cosine similarity. Photo-to-photo matches usually score 0.5–1.0, and text-to-photo matches around 0.2–0.35, because the model puts text and images in the same space but not on top of each other.
 - **Minimum similarity** hides results below a score, without running a new search.
 
 ### Admin panel (`/admin`)
@@ -228,7 +230,7 @@ curl -X POST http://localhost:3000/api/search -F mode=text -F text="sunset over 
 │   ├── object-store.ts        Local disk or S3 storage for images and settings
 │   └── types.ts               Types shared by the API and the UI
 ├── middleware.ts              Protects /admin and admin APIs
-├── scripts/setup-index.ts     Index setup
+├── scripts/                  Index setup, re-embedding, Amplify env
 └── Dockerfile                 Production container image
 ```
 
@@ -239,6 +241,7 @@ curl -X POST http://localhost:3000/api/search -F mode=text -F text="sunset over 
 | `npm run dev`                 | Start the dev server                             |
 | `npm run build` / `npm start` | Production build and server                      |
 | `npm run setup-index`         | Create the index (`-- --recreate` to rebuild it) |
+| `npm run reembed`             | Re-embed every photo with the current model      |
 | `npm run typecheck`           | Type-check with TypeScript                       |
 | `npm run lint`                | Lint with ESLint                                 |
 | `npm run format`              | Format with Prettier (`format:check` to verify)  |
@@ -292,7 +295,7 @@ For bugs and feature ideas, please open an issue first.
 ## Acknowledgments
 
 - [Elastic](https://www.elastic.co): Elasticsearch, the Elastic Inference Service and [Elastic UI](https://eui.elastic.co)
-- [Jina AI](https://jina.ai): the [jina-clip-v2](https://jina.ai/models/jina-clip-v2/) multimodal embedding model
+- [Jina AI](https://jina.ai): the jina-embeddings-v5-omni and [jina-clip-v2](https://jina.ai/models/jina-clip-v2/) multimodal embedding models
 
 ## License
 

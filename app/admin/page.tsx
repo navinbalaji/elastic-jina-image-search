@@ -66,7 +66,7 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
 
 const DESCRIPTIONS: Record<Tab, string> = {
   photos:
-    'Upload photos to embed them with Jina CLIP v2 on Elastic Inference Service and index them in Elasticsearch. Duplicate files are detected by content hash and skipped.',
+    'Upload photos to embed them with Jina embeddings on Elastic Inference Service and index them in Elasticsearch. Duplicate files are detected by content hash and skipped.',
   configuration: 'Elasticsearch connection, rate limiting and the admin password.',
 };
 

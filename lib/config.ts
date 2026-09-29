@@ -16,7 +16,7 @@ const ENV: Record<ConfigKey, () => string | undefined> = {
   inferenceId: () => process.env.INFERENCE_ID,
 };
 
-const DEFAULTS: ConfigUpdate = { esIndex: 'photos', inferenceId: '.jina-clip-v2' };
+const DEFAULTS: ConfigUpdate = { esIndex: 'photos', inferenceId: '.jina-embeddings-v5-omni-small' };
 
 const KEYS = Object.keys(ENV) as ConfigKey[];
 

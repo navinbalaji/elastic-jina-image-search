@@ -2,7 +2,7 @@ import type { Client } from '@elastic/elasticsearch';
 import { getConfig } from './config';
 import { getEs } from './es';
 
-// Embeddings from the Elastic Inference Service (EIS), default endpoint `.jina-clip-v2`
+// Embeddings from the Elastic Inference Service (EIS), default endpoint `.jina-embeddings-v5-omni-small`
 
 interface ImageInput {
   buffer: Buffer;
@@ -46,12 +46,12 @@ function imageInput({ buffer, contentType }: ImageInput): EmbeddingInput {
   };
 }
 
-export function embedImages(images: ImageInput[]): Promise<number[][]> {
-  return embed(images.map(imageInput));
+export function embedImages(images: ImageInput[], target?: InferenceTarget): Promise<number[][]> {
+  return embed(images.map(imageInput), target);
 }
 
-export async function embedImage(image: ImageInput): Promise<number[]> {
-  return (await embed([imageInput(image)]))[0];
+export async function embedImage(image: ImageInput, target?: InferenceTarget): Promise<number[]> {
+  return (await embed([imageInput(image)], target))[0];
 }
 
 export async function embedText(text: string, target?: InferenceTarget): Promise<number[]> {

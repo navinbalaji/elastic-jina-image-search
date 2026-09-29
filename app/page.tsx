@@ -110,7 +110,7 @@ export default function SearchPage() {
     <EuiPageTemplate responsive={[]} restrictWidth={1400} panelled={false} grow={false}>
       <EuiPageTemplate.Header
         pageTitle="Reverse image search"
-        description="Upload or take a photo to find visually similar images, or describe what you're looking for. Powered by Jina CLIP v2 on Elastic Inference Service and Elasticsearch kNN."
+        description="Upload or take a photo to find visually similar images, or describe what you're looking for. Powered by Jina embeddings on Elastic Inference Service and Elasticsearch kNN."
       />
       <EuiPageTemplate.Section>
         <EuiFlexGroup gutterSize="l" alignItems="flexStart" responsive>

@@ -9,7 +9,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'Image Search',
-  description: 'Reverse image search with Jina CLIP v2 on Elastic Inference Service and Elasticsearch kNN',
+  description: 'Reverse image search with Jina embeddings on Elastic Inference Service and Elasticsearch kNN',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
