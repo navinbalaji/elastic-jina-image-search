@@ -294,7 +294,7 @@ Amplify runs the server on short-lived functions with no lasting disk, so images
 3. Create the Amplify app from your Git repository, with the **Web Compute** platform.
 4. Add the environment variables from the configuration table, including `S3_BUCKET` and `S3_REGION`. Amplify only passes them to the build, so [`scripts/amplify-env.mjs`](scripts/amplify-env.mjs) writes them into `.env.production` for the server.
 
-Each upload request stays under 4 MB, because serverless functions reject request bodies over about 6 MB. Search photos over 1 MB are shrunk in the browser first, but a single admin upload over about 6 MB may be rejected.
+Amplify rejects request bodies over about 6 MB and drops requests whose upload takes about a minute (a `408`), which full-size phone photos hit on slow connections. So the browser resizes photos over 1 MB before sending them: to 2048 px for admin uploads and 1024 px for searches. Each upload request stays under 1.5 MB. Photos are still identified by the SHA-256 of the original file, so re-uploading one is detected as a duplicate.
 
 ## Deployment notes
 
