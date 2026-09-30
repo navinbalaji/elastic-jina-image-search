@@ -9,6 +9,8 @@ interface IngestFile {
   filename: string;
   buffer: Buffer;
   contentType?: string;
+  // SHA-256 of the original file when the browser resized it; used as the id so duplicates still match
+  hash?: string;
 }
 
 // Dedupe, store, embed and bulk-index a batch of images
@@ -24,7 +26,7 @@ export async function indexImages(files: IngestFile[]): Promise<IngestResult[]> 
       results[i].error = 'Unsupported file type';
       return;
     }
-    const id = sha256(f.buffer);
+    const id = f.hash ?? sha256(f.buffer);
     results[i].id = id;
     if (seen.has(id)) {
       results[i].status = 'duplicate';

@@ -13,10 +13,17 @@ export async function POST(req: Request) {
     const form = await req.formData();
     const files = form.getAll('files').filter((f): f is File => f instanceof File);
     if (files.length === 0) return jsonError('No files uploaded', 400);
+    // Optional SHA-256 of each original, sent when the browser resized the photo
+    const hashes = form.getAll('hashes').map(String);
 
     const results = await indexImages(
       await Promise.all(
-        files.map(async (f) => ({ filename: f.name, contentType: f.type, buffer: Buffer.from(await f.arrayBuffer()) })),
+        files.map(async (f, i) => ({
+          filename: f.name,
+          contentType: f.type,
+          buffer: Buffer.from(await f.arrayBuffer()),
+          hash: /^[a-f0-9]{64}$/.test(hashes[i] ?? '') ? hashes[i] : undefined,
+        })),
       ),
     );
     return NextResponse.json({ results });

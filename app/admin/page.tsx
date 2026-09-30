@@ -28,29 +28,21 @@ import { RateLimitSettings } from '@/components/RateLimitSettings';
 import { ApiError, fetchJson } from '@/lib/api-client';
 import { errorMessage } from '@/lib/errors';
 import { detectFaces, loadImage, uploadFaces } from '@/lib/face-detect';
+import { sha256Hex, shrinkImage } from '@/lib/resize-image';
 import type { IngestResult, IngestStatus } from '@/lib/types';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 const BATCH_SIZE = 8;
-// Serverless hosts such as Amplify reject request bodies over about 6 MB
-const BATCH_BYTES = 4 * 1024 * 1024;
+// Amplify drops requests whose body takes about a minute to arrive, so keep each one small for slow connections
+const BATCH_BYTES = 1.5 * 1024 * 1024;
+// Uploads are resized to this, which is plenty for display, search and faces
+const UPLOAD_MAX_SIDE = 2048;
 
-// Group files into requests of at most BATCH_SIZE files and BATCH_BYTES (a larger file goes alone)
-function toBatches(files: File[]): File[][] {
-  const batches: File[][] = [];
-  let current: File[] = [];
-  let bytes = 0;
-  for (const file of files) {
-    if (current.length && (current.length === BATCH_SIZE || bytes + file.size > BATCH_BYTES)) {
-      batches.push(current);
-      current = [];
-      bytes = 0;
-    }
-    current.push(file);
-    bytes += file.size;
-  }
-  if (current.length) batches.push(current);
-  return batches;
+interface PreparedFile {
+  original: File;
+  upload: File;
+  // SHA-256 of the original, so re-uploads are still recognised as duplicates
+  hash: string;
 }
 
 const STATUS: Record<IngestStatus, { color: string; label: string }> = {
@@ -129,38 +121,65 @@ export default function AdminPage() {
     history.replaceState(null, '', next === 'photos' ? window.location.pathname : `#${next}`);
   }
 
+  // Returns false when the session has expired
+  async function sendBatch(batch: PreparedFile[]): Promise<boolean> {
+    const body = new FormData();
+    batch.forEach((f) => {
+      body.append('files', f.upload);
+      body.append('hashes', f.hash);
+    });
+    let batchResults: IngestResult[];
+    try {
+      ({ results: batchResults } = await fetchJson<{ results: IngestResult[] }>('/api/ingest', {
+        method: 'POST',
+        body,
+      }));
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) return false;
+      batchResults = batch.map((f) => ({ filename: f.upload.name, status: 'error', error: errorMessage(err) }));
+    }
+    // Find and store faces for newly indexed photos, using the full-size original
+    for (const [k, r] of batchResults.entries()) {
+      if (r.status !== 'indexed' || !r.id) continue;
+      try {
+        r.faces = await uploadFaces(r.id, await detectFaces(await loadImage(batch[k].original)));
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 401) return false;
+        r.error = `Face scan failed: ${errorMessage(err)}`;
+      }
+    }
+    setResults((prev) => [...prev, ...batchResults]);
+    return true;
+  }
+
   async function upload() {
     const total = files.length;
     let done = 0;
+    let batch: PreparedFile[] = [];
+    let bytes = 0;
     setResults([]);
     setProgress({ done, total });
-    for (const batch of toBatches(files)) {
-      const body = new FormData();
-      batch.forEach((f) => body.append('files', f));
-      let batchResults: IngestResult[];
-      try {
-        ({ results: batchResults } = await fetchJson<{ results: IngestResult[] }>('/api/ingest', {
-          method: 'POST',
-          body,
-        }));
-      } catch (err) {
-        if (err instanceof ApiError && err.status === 401) return toLogin();
-        batchResults = batch.map((f) => ({ filename: f.name, status: 'error', error: errorMessage(err) }));
-      }
-      // Find and store faces for newly indexed photos
-      for (const [k, r] of batchResults.entries()) {
-        if (r.status !== 'indexed' || !r.id) continue;
-        try {
-          r.faces = await uploadFaces(r.id, await detectFaces(await loadImage(batch[k])));
-        } catch (err) {
-          if (err instanceof ApiError && err.status === 401) return toLogin();
-          r.error = `Face scan failed: ${errorMessage(err)}`;
-        }
-      }
-      setResults((prev) => [...prev, ...batchResults]);
+
+    const flush = async () => {
+      if (batch.length === 0) return true;
+      const ok = await sendBatch(batch);
       done += batch.length;
       setProgress({ done, total });
+      batch = [];
+      bytes = 0;
+      return ok;
+    };
+
+    for (const original of files) {
+      const upload = await shrinkImage(original, { maxSide: UPLOAD_MAX_SIDE });
+      if (batch.length === BATCH_SIZE || (batch.length && bytes + upload.size > BATCH_BYTES)) {
+        if (!(await flush())) return toLogin();
+      }
+      batch.push({ original, upload, hash: await sha256Hex(original) });
+      bytes += upload.size;
     }
+    if (!(await flush())) return toLogin();
+
     setFiles([]);
     picker.current?.removeFiles();
     setProgress(null);
